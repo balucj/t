@@ -1,0 +1,8 @@
+IP,Description
+34.56.111.95,"Package: openssh-server | Status: Vulnerable (1:10.0p1-7+deb13u1) | Remediation: Update to 1:10.0p1-7+deb13u2 | Details: Security update for OpenSSH daemon to prevent potential remote access vulnerabilities."
+34.56.111.95,"Package: openssl | Status: Vulnerable (3.5.5-1~deb13u1) | Remediation: Update to 3.5.5-1~deb13u2 | Details: Core crypto library patching to address identified SSL/TLS vulnerabilities."
+34.56.111.95,"Package: libssl3t64 | Status: Vulnerable (3.5.5-1~deb13u1) | Remediation: Update to 3.5.5-1~deb13u2 | Details: Remediation of shared SSL libraries used by multiple system applications."
+34.56.111.95,"Package: bind9-host | Status: Vulnerable (1:9.20.18-1~deb13u1) | Remediation: Update to 1:9.20.21-1~deb13u1 | Details: DNS utility security hardening to mitigate spoofing risks."
+34.56.111.95,"Package: python3-pyasn1 | Status: Vulnerable (0.6.1-1+deb13u1) | Remediation: Update to 0.6.1-1+deb13u2 | Details: ASN.1 library update to resolve parsing vulnerabilities in Python-based services."have up
+34.56.111.95,"Package: libudev1 | Status: Vulnerable (247.3-7+deb11u7) | Remediation: Update to 247.3-7+deb11u8 | Details: ASN.1 library update to resolve parsing vulnerabilities in Python-based services."have up
+34.56.111.95,"Package: perl-base | Status: Vulnerable (5.32.1-4+deb11u4) | Remediation: Update to 5.32.1-4+deb11u5 | Details: ASN.1 library update to resolve parsing vulnerabilities in Python-based services."have up

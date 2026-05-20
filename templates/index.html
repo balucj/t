@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🛡️ AI Cyber-Patch Sentinel</title>
+    <meta name="description" content="One-Click Vulnerability Mitigation Dashboard for DevSecOps">
+    <link rel="stylesheet" href="{{ base_path }}/static/style.css">
+    <script>
+        window.SENTINEL_BASE_PATH = "{{ base_path }}";
+    </script>
+</head>
+
+<body>
+    <!-- Toast Notifications Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Confirmation Modal -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal">
+            <h3>Confirm</h3>
+            <p>Are you sure?</p>
+            <div class="modal-actions">
+                <button class="btn btn-secondary btn-cancel">Cancel</button>
+                <button class="btn btn-warning btn-confirm">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Header -->
+        <header style="width: 100%;">
+            <h1>🛡️ AI Cyber-Patch Sentinel</h1>
+            <div class="header-meta">
+                <div class="status-indicator" id="statusIndicator" data-phase="idle">IDLE</div>
+            </div>
+        </header>
+
+        <!-- Phase Progress Stepper -->
+        <div class="phase-steps">
+            <div class="phase-step active">
+                <div class="phase-dot">1</div>
+                <span class="phase-label">Detecting</span>
+            </div>
+            <div class="phase-step">
+                <div class="phase-dot">2</div>
+                <span class="phase-label">Scanning</span>
+            </div>
+            <div class="phase-step">
+                <div class="phase-dot">3</div>
+                <span class="phase-label">Snapshotting</span>
+            </div>
+            <div class="phase-step">
+                <div class="phase-dot">4</div>
+                <span class="phase-label">Patching</span>
+            </div>
+            <div class="phase-step">
+                <div class="phase-dot">5</div>
+                <span class="phase-label">Verified</span>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="left-panels">
+                <!-- File Upload Section -->
+                <section class="panel" id="uploadPanel">
+                    <h2>📄 Vulnerability Report <span class="badge">CSV Upload</span></h2>
+                    <div class="form-row" style="grid-template-columns: 1fr auto; align-items: center; gap: 10px;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <input type="file" id="csvFile" accept=".csv" style="padding: 6px; width: 100%;">
+                        </div>
+                        <button id="uploadBtn" class="btn btn-secondary">⬆️ Upload CSV</button>
+                    </div>
+                </section>
+
+                <!-- Vulnerability List Section (Shown after upload) -->
+                <section class="panel" id="vulnPanel" style="display: none;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h2 style="margin: 0;">🔍 Detected Vulnerabilities <span class="badge">Target Selection</span>
+                        </h2>
+                        <button id="fixAllBtn" class="btn btn-success" style="padding: 5px 15px; font-size: 0.8rem;">🛠️
+                            Fix All</button>
+                    </div>
+                    <div id="vulnListContainer"
+                        style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border-default); border-radius: var(--radius-sm);">
+                        <table class="impact-table" style="font-size: 0.75rem;">
+                            <thead>
+                                <tr>
+                                    <th>Package</th>
+                                    <th>Version</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="vulnTableBody">
+                                <!-- Populated by script.js -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Action Section -->
+                <section class="panel" id="actionPanel">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h2 style="margin: 0;">⚡ Remediation Controls <span class="badge">One-Click</span></h2>
+                        <button id="resetBtn" class="btn btn-secondary" style="padding: 5px 15px; font-size: 0.8rem;">🔄 Reset Session</button>
+                    </div>
+                    <div class="button-group" style="justify-content: center; gap: 20px; padding: 10px 0;">
+                        <button id="fixBtn" class="btn btn-primary" style="padding: 12px 30px; font-size: 1rem; flex: 1;">🛠️ Fix Autonomous</button>
+                        <button id="rollbackBtn" class="btn btn-warning" style="padding: 12px 30px; font-size: 1rem; flex: 1;">⏪ Revert</button>
+                    </div>
+                </section>
+
+                <!-- Target Info Section -->
+                <section class="panel" id="targetInfo">
+                    <h2>🎯 Target Status <span class="badge">Auto-Detected</span></h2>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>IP Address</label>
+                            <div id="displayHost" class="rc-value"
+                                style="font-family: var(--font-mono); color: var(--accent-cyan);">—</div>
+                        </div>
+                        <div class="form-group">
+                            <label>OS Family</label>
+                            <div id="displayOS" class="rc-value" style="font-family: var(--font-mono);">—</div>
+                        </div>
+                        <div class="form-group">
+                            <label>Package Manager</label>
+                            <div id="displayPkg" class="rc-value" style="font-family: var(--font-mono);">—</div>
+                        </div>
+                        <div class="form-group">
+                            <label>Snapshot ID</label>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <div id="displaySnap" class="rc-value"
+                                    style="font-family: var(--font-mono); color: var(--accent-purple); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 120px;">
+                                    —</div>
+                                <button id="copySnapBtn" class="btn btn-secondary"
+                                    style="padding: 2px 8px; font-size: 0.7rem;" title="Copy to clipboard">📋</button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Restart Required</label>
+                            <div id="displayRestart" class="rc-value"
+                                style="font-family: var(--font-mono); font-weight: bold;">—</div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <div class="right-panels">
+                <!-- Live Terminal Section -->
+                <section class="panel" id="liveTerminal">
+                    <h2>💻 Agent Reasoning Stream <span class="badge">ReAct Loop</span></h2>
+                    <div id="terminalOutput" class="terminal">
+                        <p class="placeholder">Awaiting activity...</p>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <!-- Restart Schedule Modal -->
+    <div class="modal-overlay" id="restartModal">
+        <div class="modal">
+            <h3>📅 Schedule Restart</h3>
+            <p>The system requires a restart to complete the patch. Please select a date and time.</p>
+            <div class="form-group" style="margin-bottom: 20px;">
+                <input type="datetime-local" id="restartTime" class="form-control"
+                    style="width: 100%; padding: 10px; background: var(--bg-input); border: 1px solid var(--border-default); border-radius: 4px; color: var(--text-primary); outline: none;">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary btn-cancel-restart">Ignore</button>
+                <button class="btn btn-primary btn-confirm-restart">Schedule</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ base_path }}/static/script.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,5 @@
+IP,Description
+34.58.19.235,Package: nginx | Status: Vulnerable (1.18.0-6.1+deb11u3) | Remediation: Update to 1.22.1-9+deb12u4 | Details: Core Nginx metapackage update to resolve multiple CVEs including memory disclosure in the MP4 module (CVE-2024-7347).
+34.58.19.235,Package: nginx-light | Status: Vulnerable (1.18.0-6.1+deb11u3) | Remediation: Update to 1.22.1-9+deb12u4 | Details: Security hardening for the lightweight Nginx binary to address HTTP/2 and TLS-related vulnerabilities.
+34.58.19.235,Package: nginx-common | Status: Vulnerable (1.18.0-6.1+deb11u3) | Remediation: Update to 1.22.1-9+deb12u4 | Details: Update for common configuration files and infrastructure to ensure compatibility with patched security binaries.
+34.58.19.235,Package: libnginx-mod-http-echo | Status: Vulnerable (1.18.0-6.1+deb11u3) | Remediation: Update to 1:0.63-4 | Details: Remediation of the HTTP Echo module to prevent potential buffer handling issues during request processing.

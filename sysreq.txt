@@ -1,0 +1,25 @@
+ Operating System: Ubuntu:latest/ debain:latest
+  Configuration A: High-Performance (gemma4:e4b)
+   * Operating System: Ubuntu:latest/ debain:latest
+   * RAM: 32 GB
+   * GPU (VRAM): 12 GB VRAM 
+   * CPU: 8-Core 
+   * Disk: 500 GB
+   
+
+  Configuration B: Balanced (gemma2:9b or 2b)
+   * Operating System: Ubuntu:latest/ debain:latest
+   * RAM: 16 GB DDR4.
+   * GPU (VRAM): 8 GB VRAM 
+   * CPU: 6-Core 
+   * Disk: 250 GB 
+   * Token: 1760 (Approx per patch)
+
+  Configuration C: Lean / Cloud-First (No Local Model)
+   * Operating System: Ubuntu:latest/ debain:latest
+   * RAM: 8 GB - 12 GB (Used purely for the asyncio event loop and network socket buffers).
+   * GPU: None Required.
+   * CPU: 4-Core 
+   * Disk: 100 GB
+   * Token: 2250 (Approx per patch)
+
