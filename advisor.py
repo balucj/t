@@ -26,6 +26,47 @@ class CloudAdvisor:
         text = re.sub(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', '[REDACTED_EMAIL]', text)
         return text
 
+    def get_strategy(self, package: str, version: str, pkg_mgr: str, os_family: str, usage_data: dict = None) -> dict:
+        \"\"\"
+        Returns a remediation strategy. 
+        Uses deterministic templates for simple packages, falls back to GPT-4o for complex ones.
+        \"\"\"
+        usage_data = usage_data or {}
+        running_procs = usage_data.get("running_processes", [])
+        
+        # Simple packages that don't need service restarts or complex validation
+        simple_packages = ["vim", "wget", "curl", "git", "htop", "zip", "unzip", "nano", "tar"]
+        
+        if package.lower() in simple_packages and not running_procs:
+            logger.info(f"Using standard template for simple package: {package}")
+            if pkg_mgr == "apt":
+                return {
+                    "SEVERITY": 50,
+                    "WARNINGS": ["Standard OS utility update"],
+                    "RESTART_REQUIRED": False,
+                    "PROCEDURE": [f"DEBIAN_FRONTEND=noninteractive apt-get install --only-upgrade -y {package}"],
+                    "VALIDATION": f"{package} --version"
+                }
+            elif pkg_mgr == "dnf" or pkg_mgr == "yum":
+                return {
+                    "SEVERITY": 50,
+                    "WARNINGS": ["Standard OS utility update"],
+                    "RESTART_REQUIRED": False,
+                    "PROCEDURE": [f"{pkg_mgr} update -y {package}"],
+                    "VALIDATION": f"{package} --version"
+                }
+
+        # Fallback to LLM for complex packages or those with running processes
+        prompt = (
+            f"How to update {package} to {version} using {pkg_mgr} on {os_family}?\n"
+            f"PRE-PATCH AUDIT: {json.dumps(usage_data)}\n"
+            "CRITICAL CONSTRAINTS:\n"
+            "1. If services are running, include commands to RESTART or RELOAD them after patching.\n"
+            "2. Provide a validation test that confirms the service is running and ports are open.\n"
+            "3. ALL package manager commands MUST be non-interactive. For 'apt', use: 'DEBIAN_FRONTEND=noninteractive apt-get install -y ...'."
+        )
+        return self.get_intelligence(prompt)
+
     def get_intelligence(self, prompt: str) -> str:
         """Query ChatGPT with an anonymized prompt and forced output format."""
         if not self.api_key:

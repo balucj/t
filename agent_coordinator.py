@@ -31,6 +31,7 @@ litellm.drop_params = True
 LLM_MODEL = os.getenv("LLM_MODEL", "ollama/gemma4:e4b")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 # ── VRAM / Resource Limits ──────────────────────────────────────
 # Tuned for 6 GB VRAM (RTX 4050 Laptop) running a 9.6 GB model.
@@ -237,11 +238,17 @@ async def llm_completion(
         completion_kwargs = {
             "model": LLM_MODEL,
             "messages": messages,
-            "api_base": OLLAMA_BASE_URL,
             "temperature": 0.0,
             "max_tokens": LLM_MAX_TOKENS,
             **extra_kwargs,
         }
+        
+        # Handle Provider Specifics
+        if "ollama" in LLM_MODEL:
+            completion_kwargs["api_base"] = OLLAMA_BASE_URL
+        elif "gemini" in LLM_MODEL:
+            completion_kwargs["api_key"] = GEMINI_API_KEY
+            
         if tools:
             completion_kwargs["tools"] = tools
             completion_kwargs["tool_choice"] = "auto"
@@ -415,20 +422,22 @@ async def run_pipeline(session: ClientSession, target_index: int = None):
             swarm_state.add_log(f"Usage audit failed for {package}, proceeding with caution.", level="WARN", agent="Pipeline")
             usage_data = {}
 
-        # Step B: Get Intelligence (ChatGPT)
+        # Step B: Get Intelligence (Deterministic Template or ChatGPT)
         swarm_state.add_log(f"Consulting Cloud Advisor for {package} update strategy...", level="THINK", agent="Pipeline")
-        prompt = (
-            f"How to update {package} to {version} using {pkg_mgr} on {os_info.get('os_family')}?\n"
-            f"PRE-PATCH AUDIT: {json.dumps(usage_data)}\n"
-            "CRITICAL CONSTRAINTS:\n"
-            "1. If services are running, include commands to RESTART or RELOAD them after patching.\n"
-            "2. Provide a validation test that confirms the service is running and ports are open.\n"
-            "3. ALL package manager commands MUST be non-interactive. For 'apt', use: 'DEBIAN_FRONTEND=noninteractive apt-get install -y ...'."
+        
+        advisor_res = advisor.get_strategy(
+            package=package,
+            version=version,
+            pkg_mgr=pkg_mgr,
+            os_family=os_info.get("os_family", "unknown"),
+            usage_data=usage_data
         )
-        advisor_text = advisor.get_intelligence(prompt)
-        logger.success(advisor_text)
-
-        install_cmds, verify_cmd = _parse_advisor_response(advisor_text)
+        
+        # Log decision type
+        if "Standard OS utility update" in str(advisor_res.get("WARNINGS", "")):
+             swarm_state.add_log(f"Using standard update template for {package}.", level="INFO", agent="System")
+        
+        install_cmds, verify_cmd = _parse_advisor_response(advisor_res)
         swarm_state.add_log(f"Advisor suggested {len(install_cmds)} command(s) for {package}.", level="RESULT", agent="CloudAdvisor")
 
         # Step C: Snapshot (Once per session)
@@ -473,34 +482,26 @@ async def run_pipeline(session: ClientSession, target_index: int = None):
             try:
                 patch_data = json.loads(patch_res_raw)
                 
-                # ── Step AI-STATUS: Use Local LLM to confirm if update actually happened or if it failed incorrectly ──
-                swarm_state.add_log("Asking local AI to evaluate patch results...", level="THINK", agent="Pipeline")
-                try:
-                    eval_prompt = (
-                        f"Evaluate the package installation output for '{package}' (target version: {version}).\n"
-                        f"Output: {json.dumps(patch_data.get('install_output', []))}\n"
-                        "Status returned by tool: " + patch_data.get("status", "unknown") + "\n\n"
-                        "Respond with ONLY one word:\n"
-                        "1. 'UPDATED' - if it was successfully upgraded.\n"
-                        "2. 'SKIPPED' - if it was already at the newest version.\n"
-                        "3. 'FAILED' - if there was a real error (like 'Version not found' or network error)."
-                    )
-                    eval_resp = await llm_completion([{"role": "user", "content": eval_prompt}], None)
-                    eval_text = eval_resp.choices[0].message.content.strip().upper()
-                    
-                    if "SKIPPED" in eval_text:
-                        swarm_state.add_log(f"Local AI determined {package} is already at newest version. Marking as SKIPPED.", level="WARN", agent="Pipeline")
-                        patch_success = True
-                        patch_data["ai_status"] = "SKIPPED"
-                        patch_data["status"] = "success" # Override to success if it was already up-to-date
-                    elif "UPDATED" in eval_text and patch_data.get("status") == "success":
-                        patch_data["ai_status"] = "UPDATED"
-                    else:
-                        patch_data["ai_status"] = "FAILED"
-                except Exception as eval_err:
-                    swarm_state.add_log(f"⚠️ Local AI evaluation unavailable: {eval_err}. Falling back to tool status.", level="WARN", agent="Pipeline")
-                    logger.warning(f"Local AI evaluation failed: {eval_err}")
-                    patch_data["ai_status"] = "UPDATED" if patch_data.get("status") == "success" else "FAILED"
+                # ── Step DETERMINISTIC-STATUS: Evaluate results without LLM to save tokens ──
+                swarm_state.add_log(f"Evaluating installation results for {package}...", level="THINK", agent="Pipeline")
+                
+                eval_text = _evaluate_patch_deterministically(
+                    package, 
+                    patch_data.get("install_output", []), 
+                    patch_data.get("status", "unknown")
+                )
+                
+                if eval_text == "SKIPPED":
+                    swarm_state.add_log(f"Deterministic check: {package} is already at newest version. Marking as SKIPPED.", level="WARN", agent="Pipeline")
+                    patch_success = True
+                    patch_data["ai_status"] = "SKIPPED"
+                    patch_data["status"] = "success" # Override to success if it was already up-to-date
+                elif eval_text == "UPDATED" and patch_data.get("status") == "success":
+                    patch_data["ai_status"] = "UPDATED"
+                    swarm_state.add_log(f"Deterministic check: {package} successfully updated.", level="RESULT", agent="Pipeline")
+                else:
+                    patch_data["ai_status"] = "FAILED"
+                    swarm_state.add_log(f"Deterministic check: {package} installation failed or output unclear.", level="ERROR", agent="Pipeline")
 
                 if patch_data.get("status") == "success":
                     # Step E: Verify with Test Retries
@@ -572,8 +573,7 @@ async def run_pipeline(session: ClientSession, target_index: int = None):
             ai_stat = patch_data.get("ai_status", "UPDATED")
             msg = f"{package}: {ai_stat} and Verified Successfully (Attempts: {attempts if attempts > 0 else 1})"
             if ai_stat == "SKIPPED":
-                msg = f"{package}: Already at newest version (Verified by Local AI)"
-            
+                msg = f"{package}: Already at newest version (Deterministic Check)"
             # Final Safety Check: Verify status is still passed
             if not patch_success: # This is a logical flag we can set
                 results.append(f"{package}: Verification Failed despite version match.")
@@ -604,6 +604,42 @@ async def run_pipeline(session: ClientSession, target_index: int = None):
         swarm_state.add_log(f"Pipeline finished successfully. Summary:\n{summary}", level="RESULT", agent="System")
     
     return f"Pipeline Finished.\n{summary}"
+
+def _evaluate_patch_deterministically(package: str, install_output: list[str], status: str) -> str:
+    \"\"\"
+    Determines if a patch was UPDATED, SKIPPED, or FAILED using regex and exit codes
+    instead of calling a local LLM.
+    \"\"\"
+    output_text = "\n".join(install_output).lower()
+    
+    # 1. Check for SKIPPED (Already up to date)
+    skip_patterns = [
+        "already the newest version",
+        "is already installed",
+        "nothing to do",
+        "already up to date",
+        "no newer version found",
+        "no packages updated",
+        "no changes detected"
+    ]
+    if any(pattern in output_text for pattern in skip_patterns):
+        return "SKIPPED"
+    
+    # 2. Check for success (UPDATED)
+    if status == "success":
+        # Additional confirmation patterns for common package managers
+        success_patterns = [
+            "upgraded", "installed", "setting up", "extracting",
+            "complete!", "success", "done", "processing", "unpacked"
+        ]
+        if any(pattern in output_text for pattern in success_patterns):
+            return "UPDATED"
+        # If tool said success but no patterns matched, default to UPDATED if not skipped
+        return "UPDATED"
+
+    # 3. Otherwise FAILED
+    return "FAILED"
+
 
 def _inject_defaults(args: dict) -> dict:
     """Inject default SSH connection params and AWS/GCP region/credentials if not provided."""
@@ -1054,17 +1090,20 @@ async def main():
                         test_kwargs["num_ctx"] = OLLAMA_NUM_CTX
                         if OLLAMA_NUM_GPU >= 0:
                             test_kwargs["num_gpu"] = OLLAMA_NUM_GPU
+                        test_kwargs["api_base"] = OLLAMA_BASE_URL
+                    elif "gemini" in LLM_MODEL:
+                        test_kwargs["api_key"] = GEMINI_API_KEY
+
                     test_resp = await asyncio.to_thread(
                         litellm.completion,
                         model=LLM_MODEL,
-                        messages=[{"role": "user", "content": "Say 'ready'"}],
-                        api_base=OLLAMA_BASE_URL,
-                        max_tokens=10,
+                        messages=[{"role": "user", "content": "ping"}],
+                        max_tokens=1,
                         **test_kwargs,
                     )
                     swarm_state.set_model_status("Running")
                     swarm_state.add_log(
-                        f"LLM online: {test_resp.choices[0].message.content.strip()}",
+                        "LLM online (Health check successful)",
                         level="RESULT", agent="LLM",
                     )
                 except Exception as e:
